@@ -79,9 +79,6 @@ class Model(nn.Module):
     def predict(self, x):
         return self.net(x)
 
-    #def accuracy(self, y_pred, y):
-    #    return torch.sum(torch.round(y_pred) == y).item() / y.shape[0]
-
     def train_step(self, num_epochs, data_loader):
         for epoch in range(num_epochs):
             for x_batch, y_batch in data_loader:
@@ -101,6 +98,7 @@ class Model(nn.Module):
 learn_rate = 1e-6
 model = Model(nn.Sequential(
     nn.Linear(x_train.shape[1], 2),
+    nn.BatchNorm1d(2),
     nn.ReLU(),
     nn.Linear(2, 1)
 ),
@@ -119,4 +117,4 @@ y_pred = y_pred.squeeze().tolist()
 submission = pd.DataFrame({"Id": x_order, "SalePrice": y_pred})
 submission.to_csv(r"C:\Users\Steva\Downloads\Programming\saved\House Prices.csv", index = False)
 
-# Current best score: 0.16855
+# Current best score: 0.16452
