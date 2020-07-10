@@ -118,3 +118,5 @@ y_pred = y_pred.squeeze().tolist()
 
 submission = pd.DataFrame({"Id": x_order, "SalePrice": y_pred})
 submission.to_csv(r"C:\Users\Steva\Downloads\Programming\saved\House Prices.csv", index = False)
+
+# Current best score: 0.16855
