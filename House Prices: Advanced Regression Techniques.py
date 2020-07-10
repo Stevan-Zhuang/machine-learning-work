@@ -54,7 +54,7 @@ train_df = (train_df - train_df.mean()) / train_df.std()
 test_df = (test_df - test_df.mean()) / test_df.std()
 
 for feature in train_df:
-    if abs(train_df[feature].corr(y_train)) < 0.5:
+    if abs(train_df[feature].corr(y_train)) < 0.45:
         train_df.drop(feature, axis=1, inplace=True)
         test_df.drop(feature, axis=1, inplace=True)
 
