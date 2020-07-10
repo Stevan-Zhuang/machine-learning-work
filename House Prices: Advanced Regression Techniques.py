@@ -76,8 +76,14 @@ class Model(nn.Module):
         self.criterion = loss_func
         self.optimizer = optim.SGD(self.parameters(), lr=learn_rate)
 
+        self.learn_scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.97)
+
     def predict(self, x):
         return self.net(x)
+
+    def accuracy(self, y_pred, y):
+        return torch.abs(y_pred - y).mean().item()
+        return torch.sum(torch.round(y_pred) == y).item() / y.shape[0]
 
     def train_step(self, num_epochs, data_loader):
         for epoch in range(num_epochs):
@@ -91,9 +97,8 @@ class Model(nn.Module):
 
                 self.optimizer.step()
                 self.optimizer.zero_grad()
-            print(y_pred)
 
-        print(loss.item())
+                self.learn_scheduler.step()
 
 learn_rate = 1e-6
 model = Model(nn.Sequential(
@@ -107,8 +112,11 @@ model = Model(nn.Sequential(
 )
 
 # Train model
-num_epochs = 16
+num_epochs = 100
 model.train_step(num_epochs, train_loader)
+
+y_pred = model.predict(x_train)
+print(model.accuracy(y_pred, y_train))
 
 # Create submission
 y_pred = model.predict(x_test)
