@@ -12,8 +12,8 @@ from torch.utils.data import random_split
 
 
 # Import and organize data
-train_df = pd.read_csv(r"train.csv")
-test_df = pd.read_csv(r"test.csv")
+train_df = pd.read_csv(r"\train.csv")
+test_df = pd.read_csv(r"\test.csv")
 
 y_train = train_df["SalePrice"]
 train_df.drop("SalePrice", axis=1, inplace=True)
@@ -123,6 +123,6 @@ y_pred = model.predict(x_test)
 y_pred = y_pred.squeeze().tolist()
 
 submission = pd.DataFrame({"Id": x_order, "SalePrice": y_pred})
-submission.to_csv(r"House Prices.csv", index = False)
+submission.to_csv(r"\House Prices.csv", index = False)
 
 # Current best score: 0.16452
