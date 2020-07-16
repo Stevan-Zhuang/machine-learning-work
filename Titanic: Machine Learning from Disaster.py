@@ -12,8 +12,8 @@ from torch.utils.data import random_split
 
 
 # Import and organize data
-train_df = pd.read_csv(r"C:\Users\Steva\OneDrive\Desktop\Programming\kaggle_datasets\Titanic\train.csv")
-test_df = pd.read_csv(r"C:\Users\Steva\OneDrive\Desktop\Programming\kaggle_datasets\Titanic\test.csv")
+train_df = pd.read_csv(r"\train.csv")
+test_df = pd.read_csv(r"\test.csv")
 
 y_train = train_df["Survived"]
 train_df = train_df.drop("Survived", axis=1)
@@ -115,4 +115,4 @@ y_pred = (y_pred > 0.5).int()
 y_pred = y_pred.squeeze().tolist()
 
 submission = pd.DataFrame({"PassengerId": x_order, "Survived": y_pred})
-submission.to_csv(r"C:\Users\Steva\Downloads\Programming\saved\Titanic.csv", index = False)
+submission.to_csv(r"\Titanic.csv", index = False)
