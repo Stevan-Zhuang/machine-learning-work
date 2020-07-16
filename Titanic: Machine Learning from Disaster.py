@@ -116,3 +116,5 @@ y_pred = y_pred.squeeze().tolist()
 
 submission = pd.DataFrame({"PassengerId": x_order, "Survived": y_pred})
 submission.to_csv(r"\Titanic.csv", index = False)
+
+# Current best score: 0.76794
