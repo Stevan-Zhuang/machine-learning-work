@@ -1,128 +1,62 @@
-# Import modules
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
+from sklearn.pipeline import make_pipeline
+from sklearn.compose import make_column_transformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder
 
-from torch.utils.data import TensorDataset
-from torch.utils.data import DataLoader
-from torch.utils.data import random_split
-
-
-# Import and organize data
-train_df = pd.read_csv(r"\train.csv")
-test_df = pd.read_csv(r"\test.csv")
-
-y_train = train_df["SalePrice"]
-train_df.drop("SalePrice", axis=1, inplace=True)
-
-x_order = test_df["Id"]
-
-# Combine dataframes for easier handling
-train_df["train"] = True
-test_df["test"] = True
-
-combined_df = pd.concat([train_df, test_df])
-
-for feature in combined_df:
-    if feature == "train" or feature == "test":
-        continue
-
-    if combined_df[feature].isna().mean() > 0.2:
-        combined_df.drop(feature, axis=1, inplace=True)
-        continue
-
-    fill = combined_df[feature].mode()[0]
-    if combined_df[feature].dtype != "object":
-        fill = combined_df[feature].mean()
-    combined_df[feature].fillna(fill, inplace=True)
-
-    if combined_df[feature].dtype == "object":
-        combined_df = pd.concat([combined_df, pd.get_dummies(combined_df[feature], prefix=feature)], axis=1)
-        combined_df.drop(feature, axis=1, inplace=True)
-
-# Separate dataframes and select best features
-train_df = combined_df[combined_df["train"] == True]
-test_df = combined_df[combined_df["test"] == True]
-
-train_df = train_df.drop(["train", "test"], axis=1)
-test_df = test_df.drop(["train", "test"], axis=1)
-
-train_df = (train_df - train_df.mean()) / train_df.std()
-test_df = (test_df - test_df.mean()) / test_df.std()
-
-for feature in train_df:
-    if abs(train_df[feature].corr(y_train)) < 0.45:
-        train_df.drop(feature, axis=1, inplace=True)
-        test_df.drop(feature, axis=1, inplace=True)
-
-# Prepare data for training
-x_train = torch.tensor(train_df.values, dtype=torch.float)
-x_test = torch.tensor(test_df.values, dtype=torch.float)
-y_train = torch.tensor(y_train, dtype=torch.float).view(-1, 1)
-
-train_dataset = TensorDataset(x_train, y_train)
-train_loader = DataLoader(dataset=train_dataset, batch_size=100)
+from sklearn.model_selection import cross_val_score
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.kernel_ridge import KernelRidge
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
 
 
-# Create model
-class Model(nn.Module):
-    def __init__(self, net, loss_func, learn_rate):
-        super(Model, self).__init__()
-        self.net = net
+x_train = pd.read_csv(r"../input/train.csv")
+x_test = pd.read_csv(r"../input/test.csv")
 
-        self.criterion = loss_func
-        self.optimizer = optim.SGD(self.parameters(), lr=learn_rate)
+y_train = x_train["SalePrice"]
+x_train.drop("Id", axis=1, inplace=True)
+x_train.drop("SalePrice", axis=1, inplace=True)
 
-        self.learn_scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.97)
+test_id = x_test["Id"]
+x_test.drop("Id", axis=1, inplace=True)
 
-    def predict(self, x):
-        return self.net(x)
+numerical_features = [feature for feature in x_train
+                      if x_train[feature].dtype != "object"]
+categorical_features = [feature for feature in x_train
+                        if x_train[feature].dtype == "object" and
+                        x_train[feature].isna().mean() < 0.2 and
+                        x_train[feature].nunique() < 12]
 
-    def accuracy(self, y_pred, y):
-        return torch.abs(y_pred - y).mean().item()
-        return torch.sum(torch.round(y_pred) == y).item() / y.shape[0]
+x_train = x_train[numerical_features + categorical_features]
+x_test = x_test[numerical_features + categorical_features]
 
-    def train_step(self, num_epochs, data_loader):
-        for epoch in range(num_epochs):
-            for x_batch, y_batch in data_loader:
-                self.train()
-
-                y_pred = self.predict(x_batch)
-
-                loss = self.criterion(y_pred, y_batch)
-                loss.backward()
-
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-
-                self.learn_scheduler.step()
-
-learn_rate = 1e-6
-model = Model(nn.Sequential(
-    nn.Linear(x_train.shape[1], 2),
-    nn.BatchNorm1d(2),
-    nn.ReLU(),
-    nn.Linear(2, 1)
-),
-    nn.MSELoss(reduction="mean"),
-    learn_rate
+preprocessor = make_column_transformer(
+    (SimpleImputer(strategy="mean"), numerical_features),
+    (make_pipeline(SimpleImputer(strategy="most_frequent"), OneHotEncoder(handle_unknown="ignore")), categorical_features)
 )
 
-# Train model
-num_epochs = 100
-model.train_step(num_epochs, train_loader)
 
-y_pred = model.predict(x_train)
-print(model.accuracy(y_pred, y_train))
+def make_model(model):
+    return make_pipeline(preprocessor, model)
 
-# Create submission
-y_pred = model.predict(x_test)
-y_pred = y_pred.squeeze().tolist()
+models = [make_model(model) for model in [RandomForestRegressor(),
+                                          GradientBoostingRegressor(),
+                                          KernelRidge(),
+                                          XGBRegressor(),
+                                          LGBMRegressor()]]
 
-submission = pd.DataFrame({"Id": x_order, "SalePrice": y_pred})
-submission.to_csv(r"\House Prices.csv", index = False)
+for model in models:
+    model.fit(x_train, y_train)
 
-# Current best score: 0.16452
+y_pred = sum(model.predict(x_test) for model in models)/len(models)
+
+submission = pd.DataFrame({"Id": test_id, "SalePrice": y_pred})
+submission.to_csv(r"../input/House Prices.csv", index = False)
+
+# Current best score: 0.12952
