@@ -18,8 +18,8 @@ from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 
 
-x_train = pd.read_csv(r"C:\Users\Steva\OneDrive\Desktop\Programming\kaggle_datasets\Titanic\train.csv")
-x_test = pd.read_csv(r"C:\Users\Steva\OneDrive\Desktop\Programming\kaggle_datasets\Titanic\test.csv")
+x_train = pd.read_csv(r"\Titanic\train.csv")
+x_test = pd.read_csv(r"\Titanic\test.csv")
 
 y_train = x_train['Survived']
 x_train.drop('Survived', axis=1, inplace=True)
@@ -47,11 +47,11 @@ ensemble_model = make_pipeline(
     VotingClassifier(estimators=[
         ('KNN', KNeighborsClassifier()),
         ('DC', DecisionTreeClassifier()),
-        ('RF', RandomForestClassifier(n_estimators)),
-        ('GB', GradientBoostingClassifier(n_estimators)),
-        ('ADA', AdaBoostClassifier(n_estimators)),
-        ('XGB', XGBClassifier(n_estimators)),
-        ('LGBM', LGBMClassifier(n_estimators))
+        ('RF', RandomForestClassifier()),
+        ('GB', GradientBoostingClassifier()),
+        ('ADA', AdaBoostClassifier()),
+        ('XGB', XGBClassifier()),
+        ('LGBM', LGBMClassifier())
     ],
                      voting='soft')
 )
@@ -61,6 +61,6 @@ ensemble_model.fit(x_train, y_train)
 y_pred = ensemble_model.predict(x_test)
 
 submission = pd.DataFrame({'PassengerId': test_id, 'Survived': y_pred})
-submission.to_csv(r"C:\Users\Steva\OneDrive\Desktop\Programming\saved\Titanic.csv", index = False)
+submission.to_csv(r"\Titanic.csv", index = False)
 
 # Current best score : 0.77751
