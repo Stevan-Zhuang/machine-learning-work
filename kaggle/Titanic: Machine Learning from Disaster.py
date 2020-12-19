@@ -18,8 +18,8 @@ from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 
 
-x_train = pd.read_csv(r"\Titanic\train.csv")
-x_test = pd.read_csv(r"\Titanic\test.csv")
+x_train = pd.read_csv(r"..\kaggle_datasets\Titanic\train.csv")
+x_test = pd.read_csv(r"..\kaggle_datasets\Titanic\test.csv")
 
 y_train = x_train['Survived']
 x_train.drop('Survived', axis=1, inplace=True)
