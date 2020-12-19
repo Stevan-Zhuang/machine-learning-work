@@ -12,8 +12,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 
 
-x_train = pd.read_csv(r"C:\Users\Steva\OneDrive\Desktop\Programming\kaggle_datasets\MNIST\train.csv")
-x_test = pd.read_csv(r"C:\Users\Steva\OneDrive\Desktop\Programming\kaggle_datasets\MNIST\test.csv")
+x_train = pd.read_csv(r"..\kaggle_datasets\MNIST\train.csv")
+x_test = pd.read_csv(r"..\kaggle_datasets\MNIST\test.csv")
 
 y_train = x_train['label']
 y_train = pd.get_dummies(y_train)
