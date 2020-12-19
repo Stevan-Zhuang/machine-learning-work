@@ -16,8 +16,8 @@ from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
 
 
-x_train = pd.read_csv(r"../input/train.csv")
-x_test = pd.read_csv(r"../input/test.csv")
+x_train = pd.read_csv(r"..\kaggle_datasets\train.csv")
+x_test = pd.read_csv(r"..\kaggle_datasets\test.csv")
 
 y_train = x_train["SalePrice"]
 x_train.drop("Id", axis=1, inplace=True)
