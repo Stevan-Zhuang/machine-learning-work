@@ -15,33 +15,21 @@ x_test.drop('id', axis=1, inplace=True)
 x_train.drop('location', axis=1, inplace=True)
 x_test.drop('location', axis=1, inplace=True)
 
-x_train.drop('text', axis=1, inplace=True)
-x_test.drop('text', axis=1, inplace=True)
+from sklearn.feature_extraction.text import CountVectorizer
 
-from sklearn.pipeline import make_pipeline
-from sklearn.compose import make_column_transformer
-
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import OneHotEncoder
-
-preprocessor = make_pipeline(
-    SimpleImputer(missing_values=float('nan'), strategy='most_frequent'),
-    OneHotEncoder(handle_unknown='ignore')
-)
+count_vectorizer = CountVectorizer()
+train_vector = count_vectorizer.fit_transform(x_train['text'])
+test_vector = count_vectorizer.transform(x_test['text'])
 
 from xgboost import XGBClassifier
 
-model = make_pipeline(
-    preprocessor,
-    XGBClassifier()
-)
+model = XGBClassifier()
 
-model.fit(x_train, y_train)
-print(model.score(x_train, y_train))
+model.fit(train_vector, y_train)
 
-y_pred = model.predict(x_test)
+y_pred = model.predict(test_vector)
 
 submission = pd.DataFrame({"id": test_id, "target": y_pred})
 submission.to_csv(r"..\saved\Natural Disaster.csv", index=False)
 
-# Current best score : 0.71345
+# Current best score : 0.78148
