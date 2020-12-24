@@ -57,6 +57,6 @@ for model in models:
 y_pred = sum(model.predict(x_test) for model in models)/len(models)
 
 submission = pd.DataFrame({"Id": test_id, "SalePrice": y_pred})
-submission.to_csv(r"../input/House Prices.csv", index = False)
+submission.to_csv(r"..\saved\House Prices.csv", index=False)
 
 # Current best score: 0.12952
