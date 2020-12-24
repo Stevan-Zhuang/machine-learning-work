@@ -61,6 +61,6 @@ ensemble_model.fit(x_train, y_train)
 y_pred = ensemble_model.predict(x_test)
 
 submission = pd.DataFrame({'PassengerId': test_id, 'Survived': y_pred})
-submission.to_csv(r"\Titanic.csv", index = False)
+submission.to_csv(r"..\saved\Titanic.csv", index=False)
 
 # Current best score : 0.77751
