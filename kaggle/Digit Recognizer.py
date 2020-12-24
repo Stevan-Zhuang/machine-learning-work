@@ -68,6 +68,6 @@ y_pred = model(x_test)
 y_pred = y_pred.argmax(1)
 
 submission = pd.DataFrame({'ImageId': test_id + 1, 'Label': y_pred.numpy()})
-submission.to_csv(r"C:\Users\Steva\OneDrive\Desktop\Programming\saved\MNIST.csv", index=False)
+submission.to_csv(r"..\saved\MNIST.csv", index=False)
 
 # Current best score: 
