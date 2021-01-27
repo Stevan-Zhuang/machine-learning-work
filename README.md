@@ -1,1 +1,1 @@
-Tools I wrote to speed up the coding process for machine learning. Made for personal use and for practice.
+A collection of things I wrote for fun and to practice machine learning.
