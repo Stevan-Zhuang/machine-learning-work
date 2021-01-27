@@ -83,7 +83,7 @@ class GANModel(pl.LightningModule):
 
     def configure_optimizers(self):
         return [torch.optim.Adam(self.generator.parameters(), lr=0.0002),
-                torch.optim.Adam(self.discriminator.parameters(), lr=0.002)]
+                torch.optim.Adam(self.discriminator.parameters(), lr=0.0002)]
 
     def train_dataloader(self):
         preprocess = transforms.Compose([transforms.ToTensor(),
@@ -102,7 +102,8 @@ model.eval()
 while True:
     random_noise = torch.randn(1, 100)
     y_pred = model(random_noise)
+    score = model.discriminator(y_pred).item()
     
-    plt.title(f"{model.discriminator(y_pred).item():.3f}")
+    plt.title(f"{score * 100:.1f}")
     plt.imshow(y_pred.detach().view(28, 28))
     plt.show()
