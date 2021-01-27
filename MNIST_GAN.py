@@ -14,16 +14,25 @@ from torchvision.datasets import MNIST
 from torchvision import transforms
 import matplotlib.pyplot as plt
 
+RANDOM_SAMPLE = 100
+
 class Generator(nn.Module):
 
     def __init__(self):
         super(Generator, self).__init__()
         self.model = nn.Sequential(
-            nn.Linear(100, 32),
-            nn.ReLU(inplace=True),
+            nn.Linear(RANDOM_SAMPLE, 32),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(32, 64),
-            nn.ReLU(inplace=True),
-            nn.Linear(64, 28*28),
+            nn.BatchNorm1d(64, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(64, 128),
+            nn.BatchNorm1d(128, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(128, 256),
+            nn.BatchNorm1d(256, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(256, 28*28),
             nn.Tanh(),
         )
 
@@ -35,11 +44,11 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
         self.model = nn.Sequential(
-            nn.Linear(28*28, 64),
-            nn.ReLU(inplace=True),
-            nn.Linear(64, 32),
-            nn.ReLU(inplace=True),
-            nn.Linear(32, 1),
+            nn.Linear(28*28, 128),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(128, 64),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(64, 1),
             nn.Sigmoid(),
         )
 
@@ -60,7 +69,7 @@ class GANModel(pl.LightningModule):
     def training_step(self, batch, batch_idx, optimizer_idx):
         images, _ = batch
         if optimizer_idx == 0:
-            random_noise = torch.randn(images.size(0), 100)
+            random_noise = torch.randn(images.size(0), RANDOM_SAMPLE)
             self.generated_images = self(random_noise)
             y = torch.ones(images.size(0), 1)
             y_pred = self.discriminator(self.generated_images)
@@ -78,25 +87,27 @@ class GANModel(pl.LightningModule):
             return (loss_real + loss_fake) / 2
 
     def configure_optimizers(self):
-        return [torch.optim.Adam(self.generator.parameters(), lr=5e-4),
-                torch.optim.Adam(self.discriminator.parameters(), lr=5e-4)]
+        return [torch.optim.Adam(self.generator.parameters(), lr=2e-4, betas=(0.5, 0.999)),
+                torch.optim.Adam(self.discriminator.parameters(), lr=2e-4, betas=(0.5, 0.999))]
 
     def train_dataloader(self):
         preprocess = transforms.Compose([transforms.ToTensor(),
                                          transforms.Normalize([0.5], [0.5])])
         train_dataset = MNIST(os.getcwd(), train=True, transform=preprocess)
-        train_loader = DataLoader(train_dataset, batch_size=64)
+        train_loader = DataLoader(train_dataset, batch_size=32)
         return train_loader
 
 model = GANModel()
 
-trainer = pl.Trainer(max_epochs=8)
+trainer = pl.Trainer(max_epochs=4)
 trainer.fit(model)
 
+model.eval()
+
 while True:
-    random_noise = torch.randn(1, 100)
+    random_noise = torch.randn(1, RANDOM_SAMPLE)
     y_pred = model(random_noise)
     
     plt.title(f"{model.discriminator(y_pred).item():.3f}")
-    plt.imshow(y_pred.view(28, 28))
+    plt.imshow(y_pred.detach().view(28, 28))
     plt.show()
