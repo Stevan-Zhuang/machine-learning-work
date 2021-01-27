@@ -96,6 +96,7 @@ trainer.fit(model)
 while True:
     random_noise = torch.randn(1, 100)
     y_pred = model(random_noise)
-
+    
+    plt.title(f"{model.discriminator(y_pred).item():.3f}")
     plt.imshow(y_pred.view(28, 28))
     plt.show()
