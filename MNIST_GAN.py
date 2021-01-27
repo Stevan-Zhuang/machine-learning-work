@@ -1,6 +1,4 @@
 # A generative adversarial network for the MNIST database
-# Generator model doesn't understand how to intelligently generate data
-# it currently generates shapes that may vaguely resemble a digit
 
 import torch
 from torch import nn
@@ -13,25 +11,18 @@ from torchvision.datasets import MNIST
 from torchvision import transforms
 import matplotlib.pyplot as plt
 
-RANDOM_SAMPLE = 100
-
 class Generator(nn.Module):
 
     def __init__(self):
         super(Generator, self).__init__()
         self.model = nn.Sequential(
-            nn.Linear(RANDOM_SAMPLE, 32),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(32, 64),
-            nn.BatchNorm1d(64, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(64, 128),
-            nn.BatchNorm1d(128, 0.8),
+            nn.Linear(100, 128),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(128, 256),
-            nn.BatchNorm1d(256, 0.8),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 28*28),
+            nn.Linear(256, 512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(512, 28*28),
             nn.Tanh(),
         )
 
@@ -43,11 +34,16 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
         self.model = nn.Sequential(
-            nn.Linear(28*28, 128),
+            nn.Linear(28*28, 512),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(128, 64),
+            nn.Dropout(0.3),
+            nn.Linear(512, 256),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(64, 1),
+            nn.Dropout(0.3),
+            nn.Linear(256, 128),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout(0.3),
+            nn.Linear(128, 1),
             nn.Sigmoid(),
         )
 
@@ -68,7 +64,7 @@ class GANModel(pl.LightningModule):
     def training_step(self, batch, batch_idx, optimizer_idx):
         images, _ = batch
         if optimizer_idx == 0:
-            random_noise = torch.randn(images.size(0), RANDOM_SAMPLE)
+            random_noise = torch.randn(images.size(0), 100)
             self.generated_images = self(random_noise)
             y = torch.ones(images.size(0), 1)
             y_pred = self.discriminator(self.generated_images)
@@ -86,25 +82,25 @@ class GANModel(pl.LightningModule):
             return (loss_real + loss_fake) / 2
 
     def configure_optimizers(self):
-        return [torch.optim.Adam(self.generator.parameters(), lr=2e-4, betas=(0.5, 0.999)),
-                torch.optim.Adam(self.discriminator.parameters(), lr=2e-4, betas=(0.5, 0.999))]
+        return [torch.optim.Adam(self.generator.parameters(), lr=0.0002),
+                torch.optim.Adam(self.discriminator.parameters(), lr=0.002)]
 
     def train_dataloader(self):
         preprocess = transforms.Compose([transforms.ToTensor(),
                                          transforms.Normalize([0.5], [0.5])])
         train_dataset = MNIST(os.getcwd(), train=True, transform=preprocess)
-        train_loader = DataLoader(train_dataset, batch_size=32)
+        train_loader = DataLoader(train_dataset, batch_size=100)
         return train_loader
 
 model = GANModel()
 
-trainer = pl.Trainer(max_epochs=4)
+trainer = pl.Trainer(max_epochs=200)
 trainer.fit(model)
 
 model.eval()
 
 while True:
-    random_noise = torch.randn(1, RANDOM_SAMPLE)
+    random_noise = torch.randn(1, 100)
     y_pred = model(random_noise)
     
     plt.title(f"{model.discriminator(y_pred).item():.3f}")
