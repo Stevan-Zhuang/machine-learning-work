@@ -1,3 +1,7 @@
+# Structures for different models for the pytorch framework
+# Only model is currently SciKitModel, a model that gives a standard torch
+# regressor or classifier some compatibility with sklearn
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
