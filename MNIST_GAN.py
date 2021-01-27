@@ -1,7 +1,6 @@
 # A generative adversarial network for the MNIST database
 # Generator model doesn't understand how to intelligently generate data
-# instead it "brute forces" the discriminator by making a circle that 
-# vaguely resembles every single digit at once
+# it currently generates shapes that may vaguely resemble a digit
 
 import torch
 from torch import nn
