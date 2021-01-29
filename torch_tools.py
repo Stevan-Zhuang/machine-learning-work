@@ -1,27 +1,19 @@
-# Structures for different models for the pytorch framework
-# Only model is currently SciKitModel, a model that gives a standard torch
-# regressor or classifier some compatibility with sklearn
-
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn
+from torch.nn import functional as F
 
 from torch.utils.data import TensorDataset
 from torch.utils.data import DataLoader
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 def to_tensor(data):
     """
     Converts input data to torch tensor
-
     Parameters
     ----------
     data : array-like, matrix object
-
     Returns
     -------
     tensor : data in tensor form
@@ -42,28 +34,20 @@ def to_tensor(data):
                     "recieved object of type {} instead."
                     .format(type(data)))
 
-
 class SciKitModel(nn.Module):
     """
     An extension of the ``torch.nn.Module`` that wraps an instance of a torch model
     and adds compatibility with sklearn, as well as regression and classification.
     Currently, the class has basic support for ``sklearn.pipeline`` and ``sklearn.GridSearchCV``.
-
     Parameters
     ----------
     net : torch model object from the ``torch.nn`` module.
-
     is_classifier : bool whether the model is a classifier. Changes criterion.
-
     has_logits : bool (default=False) whether the labels given will be in logit form
-
     criterion : loss function (default=nn.MSELoss() if not is_classifier else nn.NLLLoss()) from the ``torch.nn`` module.
     Recommended: default. Other loss functions are unsupported and may cause errors.
-
     learn_rate : float (default=0.1) Learning rate for optimizer.
-
     num_epochs : int (default=100) The number of iterations the model will train for when using ``.fit(x, y)``.
-
     Examples
     --------
     >>> model = SciKitModel(
@@ -78,7 +62,6 @@ class SciKitModel(nn.Module):
     >>> result = grid_search.fit(x, y).best_params_
     >>> result
     {'learn_rate': 0.1, 'max_epochs': 10}
-
     """
     def __init__(self, net,
                  is_classifier,
@@ -98,21 +81,18 @@ class SciKitModel(nn.Module):
                           else nn.MSELoss() if not is_classifier else nn.NLLLoss())
         self.has_logits = has_logits
 
-        self.optimizer = optim.SGD(self.parameters(), lr=self.learn_rate)
+        self.optimizer = torch.optim.SGD(self.parameters(), lr=self.learn_rate)
 
     def predict(self, x):
         """
         Predict labels of features using the model.
-
         Parameters
         ----------
         x : array-like, matrix object of shape (n_features) or (n_samples, n_features) Feature values.
-
         Returns
         -------
         y : tensor of shape (n_samples, n_labels) if not with_logits else tensor of shape (n_samples).
         Predicted label values.
-
         """
         x = to_tensor(x).float()
         return self.net(x)
@@ -120,17 +100,13 @@ class SciKitModel(nn.Module):
     def fit(self, x, y):
         """
         Fits model to features and labels.
-
         Parameters
         ----------
         x : array-like, matrix object of shape (n_features) or (n_samples, n_features) Feature values.
-
         y : array-like, matrix object of shape (n_labels) or (n_samples, n_labels) Label values.
-
         Returns
         -------
         self : instance of self.
-
         """
         x = to_tensor(x).float()
 
@@ -160,17 +136,13 @@ class SciKitModel(nn.Module):
         """
         Returns the score given by the assigned criterion.
         Called by sklearn's gridsearchcv for evaluations of models.
-
         Parameters
         ----------
         x : array-like, matrix object of shape (n_features) or (n_samples, n_features) Feature values.
-
         y : array-like, matrix object of shape (n_labels) or (n_samples, n_labels) Label values.
-
         Returns
         -------
         float : score of model prediction.
-
         """
         x = to_tensor(x).float()
 
@@ -185,17 +157,13 @@ class SciKitModel(nn.Module):
     def accuracy(self, x, y):
         """
         Returns mean absolute error loss if regressor and accuracy percentage if classifier
-
         Parameters
         ----------
         x : array-like, matrix object of shape (n_features) or (n_samples, n_features) Feature values.
-
         y : array-like, matrix object of shape (n_labels) or (n_samples, n_labels) Label values.
-
         Returns
         -------
         float : accuracy of model prediction.
-
         """
         x = to_tensor(x).float()
 
@@ -213,7 +181,6 @@ class SciKitModel(nn.Module):
         """
         Returns model parameters.
         Called by sklearn's gridsearchcv for cloning of models.
-
         Returns
         -------
         params : dict of model parameters.
@@ -230,11 +197,9 @@ class SciKitModel(nn.Module):
         """
         Sets model parameters.
         Called by sklearn's gridsearchcv for parameter testing of models.
-
         Returns
         -------
         self : instance of self.
-
         """
         for key, value in params.items():
             setattr(self, key, value)
@@ -243,3 +208,26 @@ class SciKitModel(nn.Module):
                     group['lr'] = value
 
         return self
+
+class Reshape(nn.Module):
+    """
+    A reshape layer for torch, intended to be used with an ``nn.Sequential`` model.
+    Parameters
+    ----------
+    out_dim : list or tuple The resulting output shape 
+    """
+    def __init__(self, out_dim):
+        super(Reshape, self).__init__()
+        self.out_dim = out_dim
+
+    def forward(self, x):
+        """
+        Automatically called when calling the model.
+        Parameters
+        ----------
+        x : A torch tensor
+        Returns
+        -------
+        torch tensor : reshaped tensor
+        """
+        return x.view(*self.out_dim)
