@@ -39,32 +39,19 @@ class DQNNet(nn.Module):
 field_names = ('state', 'action', 'reward', 'next_state', 'done')
 Experience = namedtuple('Experience', field_names)
 
-class ReplayMemory:
+class ReplayMemory(IterableDataset):
 
-    def __init__(self, capacity):
+    def __init__(self, capacity, sample_size):
         self.memory = deque(maxlen=capacity)
-    
-    def __len__(self):
-        raise Exception()
-        return len(self.memory)
-
-    def push(self, experience):
-        self.memory.append(experience)
-
-    def sample(self, sample_size):
-        return random.sample(self.memory, sample_size)
-
-# Dataloader wrapper for replay memory
-class RLDataset(IterableDataset):
-
-    def __init__(self, replay_memory, sample_size):
-        self.replay_memory = replay_memory
         self.sample_size = sample_size
 
     def __iter__(self):
-        samples = self.replay_memory.sample(self.sample_size)
-        for idx in range(self.sample_size):
-            yield samples[idx]
+        samples = random.sample(self.memory, self.sample_size)
+        for sample in samples:
+            yield sample
+
+    def push(self, experience):
+        self.memory.append(experience)
 
 # Agent that chooses actions in environment
 class Agent:
@@ -113,7 +100,8 @@ class DQNModel(pl.LightningModule):
         self.policy_net = DQNNet(obs_size, hidden_size, n_actions)
         self.target_net = deepcopy(self.policy_net)
 
-        self.replay_memory = ReplayMemory(self.hparams.replay_size)
+        self.replay_memory = ReplayMemory(self.hparams.replay_size,
+                                          self.hparams.episode_size)
         self.agent = Agent(self.env, self.replay_memory)
 
         self.populate(self.hparams.start_steps)
@@ -165,8 +153,7 @@ class DQNModel(pl.LightningModule):
         return optim.Adam(self.policy_net.parameters(), lr=self.hparams.lr)
 
     def train_dataloader(self):
-        dataset = RLDataset(self.replay_memory, self.hparams.episode_size)
-        return DataLoader(dataset, batch_size=self.hparams.batch_size)
+        return DataLoader(self.replay_memory, batch_size=self.hparams.batch_size)
 
 # Run code
 if __name__ == '__main__':
