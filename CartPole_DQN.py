@@ -1,62 +1,72 @@
+# Machine learning
 import torch
 from torch import nn
+from torch import optim
 from torch.nn import functional as F
-from torch.optim import Adam
-from torch.utils.data import DataLoader, IterableDataset
+from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 import wandb
-
-import math
-import random
 import numpy as np
 import matplotlib.pyplot as plt
+import argparse
 
+# Environment
 import gym
 
-from collections import namedtuple
+# Extra tools
+import random
+import math
+from copy import deepcopy
+from collections import deque, namedtuple
+from torch.utils.data import IterableDataset
 
-field_names = ('state', 'action', 'reward', 'done', 'next_state')
+# Policy and target network
+class DQNNet(nn.Module):
+
+    def __init__(self, input_size, hidden_size, output_size):
+        super(DQNNet, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size)
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+# Dataset to store and replay experiences
+field_names = ('state', 'action', 'reward', 'next_state', 'done')
 Experience = namedtuple('Experience', field_names)
 
-from collections import deque
+class ReplayMemory:
 
-class ReplayMemory(IterableDataset):
-
-    def __init__(self, capacity, sample_size):
+    def __init__(self, capacity):
         self.memory = deque(maxlen=capacity)
-        self.sample_size = sample_size
-
-    def __iter__(self):
-        samples = self.sample()
-        for sample in zip(*samples):
-            yield sample
+    
+    def __len__(self):
+        raise Exception()
+        return len(self.memory)
 
     def push(self, experience):
         self.memory.append(experience)
 
-    def sample(self):
-        samples = random.sample(self.memory, self.sample_size)
-        states, actions, rewards, dones, next_states = zip(*samples)
-        return (torch.tensor(states), torch.tensor(actions),
-                torch.tensor(rewards, dtype=torch.float32),
-                torch.tensor(dones), torch.tensor(next_states))
+    def sample(self, sample_size):
+        return random.sample(self.memory, sample_size)
 
-class DQN(nn.Module):
+# Dataloader wrapper for replay memory
+class RLDataset(IterableDataset):
 
-    def __init__(self, state_size, hidden_size, n_actions):
-        super(DQN, self).__init__()
-        self.net = nn.Sequential(
-            nn.Linear(state_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, n_actions),
-            nn.Tanh()
-        )
+    def __init__(self, replay_memory, sample_size):
+        self.replay_memory = replay_memory
+        self.sample_size = sample_size
 
-    def forward(self, x):
-        return self.net(x.float())
+    def __iter__(self):
+        samples = self.replay_memory.sample(self.sample_size)
+        for idx in range(self.sample_size):
+            yield samples[idx]
 
-
+# Agent that chooses actions in environment
 class Agent:
 
     def __init__(self, env, replay_memory):
@@ -72,16 +82,16 @@ class Agent:
         if random.random() < epsilon:
             action = self.env.action_space.sample()
         else:
-            state = torch.tensor([self.state])
+            state = torch.tensor([self.state], dtype=torch.float)
             q_values = policy_net(state)
             action = q_values.argmax(dim=1).item()
         return action
 
-    def play_step(self, policy_net, epsilon):
+    def play_step(self, policy_net, epsilon=0.0):
         action = self.get_action(policy_net, epsilon)
 
         new_state, reward, done, _ = self.env.step(action)
-        exp = Experience(self.state, action, reward, done, new_state)
+        exp = Experience(self.state, action, reward, new_state, done)
         self.replay_memory.push(exp)
 
         self.state = new_state
@@ -89,88 +99,101 @@ class Agent:
             self.reset()
         return reward, done
 
-
+# Pytorch Lightning DQN system
 class DQNModel(pl.LightningModule):
 
-    def __init__(self):
+    def __init__(self, hparams):
         super(DQNModel, self).__init__()
-        self.env = gym.make(ENV)
-        self.replay_memory = ReplayMemory(REPLAY_SIZE, SAMPLE_SIZE)
+        self.hparams = hparams
+
+        self.env = gym.make(self.hparams.env)
+        obs_size = self.env.observation_space.shape[0]
+        hidden_size = self.hparams.hidden_size
+        n_actions = self.env.action_space.n
+        self.policy_net = DQNNet(obs_size, hidden_size, n_actions)
+        self.target_net = deepcopy(self.policy_net)
+
+        self.replay_memory = ReplayMemory(self.hparams.replay_size)
         self.agent = Agent(self.env, self.replay_memory)
 
-        obs_size = self.env.observation_space.shape[0]
-        n_actions = self.env.action_space.n
-        self.policy_net = DQN(obs_size, HIDDEN_SIZE, n_actions)
-        self.target_net = DQN(obs_size, HIDDEN_SIZE, n_actions)
-
-        self.populate(START_STEPS)
+        self.populate(self.hparams.start_steps)
 
     def populate(self, steps):
-        for idx in range(steps):
+        for _ in range(steps):
             self.agent.play_step(self.policy_net, epsilon=1.0)
+
+    def get_epsilon(self, epsilon_start, epsilon_end, epsilon_decay, global_step):
+        return epsilon_end + (epsilon_start - epsilon_end) * math.exp(
+            -1.0 * global_step / epsilon_decay
+        )
 
     def forward(self, x):
         return self.policy_net(x)
 
     def dqn_mse_loss(self, batch):
-        states, actions, rewards, dones, next_states = batch
-        state_action_values = self.policy_net(states).gather(1, actions.unsqueeze(-1)).squeeze(-1)
+        states, actions, rewards, next_states, dones = batch
+        states, next_states = states.float(), next_states.float()
+        rewards = rewards.float()
 
-        with torch.no_grad():
-            next_state_values, _ = self.target_net(next_states).max(1)
-            next_state_values[dones] = 0.0
-            next_state_values = next_state_values.detach()
+        q_values = self.policy_net(states)
+        q_values = q_values.gather(1, actions.unsqueeze(-1)).squeeze(-1)
 
-        expected_state_action_values = next_state_values * GAMMA + rewards
+        next_actions = self.target_net(next_states).argmax(1)
+        next_q_values = self.target_net(next_states)
+        next_q_values = next_q_values.gather(1, next_actions.unsqueeze(-1)).squeeze(-1)
+        next_q_values = next_q_values.detach()
+        next_q_values[dones] = 0.0
+        expected_q_values = next_q_values * self.hparams.gamma + rewards
 
         criterion = nn.MSELoss()
-        loss = criterion(state_action_values, expected_state_action_values)
+        loss = criterion(q_values, expected_q_values)
         return loss
 
     def training_step(self, batch, batch_idx):
-        epsilon = max(EPS_END, EPS_START - self.global_step + 1 / EPS_DECAY)
+        epsilon = self.get_epsilon(self.hparams.eps_start, self.hparams.eps_end,
+                                   self.hparams.eps_decay, self.global_step)
         reward, done = self.agent.play_step(self.policy_net, epsilon)
 
         loss = self.dqn_mse_loss(batch)
 
-        if self.global_step % TARGET_UPDATE == 0:
+        if self.global_step % self.hparams.target_update == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
         return loss
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=LEARN_RATE)
+        return optim.Adam(self.policy_net.parameters(), lr=self.hparams.lr)
 
     def train_dataloader(self):
-        return DataLoader(self.replay_memory, batch_size=BATCH_SIZE)
+        dataset = RLDataset(self.replay_memory, self.hparams.episode_size)
+        return DataLoader(dataset, batch_size=self.hparams.batch_size)
 
+# Run code
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", type=str, default="CartPole-v0")
+    parser.add_argument("--lr", type=float, default=0.02)
+    parser.add_argument("--hidden_size", type=int, default=128)
+    parser.add_argument("--replay_size", type=int, default=1000)
+    parser.add_argument("--episode_size", type=int, default=200)
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--start_steps", type=int, default=1000)
+    parser.add_argument("--eps_start", type=float, default=1.0)
+    parser.add_argument("--eps_end", type=float, default=0.01)
+    parser.add_argument("--eps_decay", type=float, default=1000)
+    parser.add_argument("--gamma", type=float, default=0.99)
+    parser.add_argument("--target_update", type=int, default=10)
 
-ENV = "CartPole-v0"
-LEARN_RATE = 0.001
-HIDDEN_SIZE = 128
-BATCH_SIZE = 128
-SAMPLE_SIZE = 200
-REPLAY_SIZE = 1000
-START_STEPS = 1000
-GAMMA = 0.999
-EPS_START = 0.9
-EPS_END = 0.05
-EPS_DECAY = 200
-TARGET_UPDATE = 10
+    model = DQNModel(parser.parse_args())
 
+    trainer = pl.Trainer(max_epochs=500)
+    trainer.fit(model)
 
-model = DQNModel()
+    model.eval()
 
-trainer = pl.Trainer(max_epochs=1000, progress_bar_refresh_rate=30)
-trainer.fit(model)
-
-env = gym.make(ENV)
-state = env.reset()
-model.eval()
-while True:
-    env.render()
-    action = model(torch.tensor([state])).argmax(dim=1).item()
-    new_state, _, done, _ = env.step(action)
-    state = new_state
-    if done:
-        break
+    state = model.env.reset()
+    while True:
+        model.env.render()
+        _, done = model.agent.play_step(model.policy_net)
+        if done:
+            break
