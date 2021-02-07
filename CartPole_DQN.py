@@ -21,20 +21,6 @@ from copy import deepcopy
 from collections import deque, namedtuple
 from torch.utils.data import IterableDataset
 
-# Policy and target network
-class DQNNet(nn.Module):
-
-    def __init__(self, input_size, hidden_size, output_size):
-        super(DQNNet, self).__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, output_size)
-        )
-
-    def forward(self, x):
-        return self.net(x)
-
 # Dataset to store and replay experiences
 field_names = ('state', 'action', 'reward', 'next_state', 'done')
 Experience = namedtuple('Experience', field_names)
@@ -53,29 +39,44 @@ class ReplayMemory(IterableDataset):
     def push(self, experience):
         self.memory.append(experience)
 
+# Policy and target network
+class DQNNet(nn.Module):
+
+    def __init__(self, input_size, hidden_size, output_size):
+        super(DQNNet, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size)
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
 # Agent that chooses actions in environment
 class Agent:
 
-    def __init__(self, env, replay_memory):
+    def __init__(self, env, replay_memory, policy_net):
         self.env = env
         self.replay_memory = replay_memory
+        self.policy_net = policy_net
         self.state = None
         self.reset()
 
     def reset(self):
         self.state = self.env.reset()
 
-    def get_action(self, policy_net, epsilon):
+    def get_action(self, epsilon):
         if random.random() < epsilon:
             action = self.env.action_space.sample()
         else:
             state = torch.tensor([self.state], dtype=torch.float)
-            q_values = policy_net(state)
+            q_values = self.policy_net(state)
             action = q_values.argmax(dim=1).item()
         return action
 
-    def play_step(self, policy_net, epsilon=0.0):
-        action = self.get_action(policy_net, epsilon)
+    def play_step(self, epsilon=0.0):
+        action = self.get_action(epsilon)
 
         new_state, reward, done, _ = self.env.step(action)
         exp = Experience(self.state, action, reward, new_state, done)
@@ -84,7 +85,14 @@ class Agent:
         self.state = new_state
         if done:
             self.reset()
-        return reward, done
+        return done
+
+    def play(self):
+        self.reset()
+        done = False
+        while not done:
+            self.env.render()
+            done = self.play_step()
 
 # Pytorch Lightning DQN system
 class DQNModel(pl.LightningModule):
@@ -102,25 +110,24 @@ class DQNModel(pl.LightningModule):
 
         self.replay_memory = ReplayMemory(self.hparams.replay_size,
                                           self.hparams.episode_size)
-        self.agent = Agent(self.env, self.replay_memory)
-
+        self.agent = Agent(self.env, self.replay_memory, self.policy_net)
         self.populate(self.hparams.start_steps)
 
     def populate(self, steps):
         for _ in range(steps):
-            self.agent.play_step(self.policy_net, epsilon=1.0)
+            self.agent.play_step(epsilon=1.0)
 
     def get_epsilon(self, epsilon_start, epsilon_end, epsilon_decay, global_step):
         return epsilon_end + (epsilon_start - epsilon_end) * math.exp(
-            -1.0 * global_step / epsilon_decay
-        )
+            -1.0 * global_step / epsilon_decay)
 
     def forward(self, x):
         return self.policy_net(x)
 
     def dqn_mse_loss(self, batch):
         states, actions, rewards, next_states, dones = batch
-        states, next_states = states.float(), next_states.float()
+        states = states.float()
+        next_states = next_states.float()
         rewards = rewards.float()
 
         q_values = self.policy_net(states)
@@ -140,13 +147,11 @@ class DQNModel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         epsilon = self.get_epsilon(self.hparams.eps_start, self.hparams.eps_end,
                                    self.hparams.eps_decay, self.global_step)
-        reward, done = self.agent.play_step(self.policy_net, epsilon)
+        done = self.agent.play_step(epsilon)
 
         loss = self.dqn_mse_loss(batch)
-
         if self.global_step % self.hparams.target_update == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
-
         return loss
 
     def configure_optimizers(self):
@@ -177,10 +182,5 @@ if __name__ == '__main__':
     trainer.fit(model)
 
     model.eval()
-
-    state = model.env.reset()
-    while True:
-        model.env.render()
-        _, done = model.agent.play_step(model.policy_net)
-        if done:
-            break
+    agent = model.agent
+    agent.play()
