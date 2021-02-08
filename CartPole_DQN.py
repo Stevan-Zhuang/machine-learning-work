@@ -15,6 +15,7 @@ import argparse
 import gym
 
 # Extra tools
+import os
 import random
 import math
 from copy import deepcopy
@@ -75,7 +76,7 @@ class Agent:
             action = q_values.argmax(dim=1).item()
         return action
 
-    def play_step(self, epsilon=0.0):
+    def play_step(self, epsilon):
         action = self.get_action(epsilon)
 
         new_state, reward, done, _ = self.env.step(action)
@@ -85,14 +86,14 @@ class Agent:
         self.state = new_state
         if done:
             self.reset()
-        return done
+        return reward, done
 
     def play(self):
         self.reset()
         done = False
         while not done:
             self.env.render()
-            done = self.play_step()
+            reward, done = self.play_step(epsilon=0.0)
 
 # Pytorch Lightning DQN system
 class DQNModel(pl.LightningModule):
@@ -111,6 +112,9 @@ class DQNModel(pl.LightningModule):
         self.replay_memory = ReplayMemory(self.hparams.replay_size,
                                           self.hparams.episode_size)
         self.agent = Agent(self.env, self.replay_memory, self.policy_net)
+
+        self.episode_reward = 0
+        self.total_reward = 0
         self.populate(self.hparams.start_steps)
 
     def populate(self, steps):
@@ -147,11 +151,16 @@ class DQNModel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         epsilon = self.get_epsilon(self.hparams.eps_start, self.hparams.eps_end,
                                    self.hparams.eps_decay, self.global_step)
-        done = self.agent.play_step(epsilon)
+        reward, done = self.agent.play_step(epsilon)
+        self.episode_reward += reward
 
         loss = self.dqn_mse_loss(batch)
         if self.global_step % self.hparams.target_update == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
+        if done:
+            self.total_reward = self.episode_reward
+            self.episode_reward = 0
+        self.log("total_reward", self.total_reward)
         return loss
 
     def configure_optimizers(self):
@@ -175,7 +184,6 @@ if __name__ == '__main__':
     parser.add_argument("--eps_decay", type=float, default=1000)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--target_update", type=int, default=10)
-
     model = DQNModel(parser.parse_args())
 
     trainer = pl.Trainer(max_epochs=500)
