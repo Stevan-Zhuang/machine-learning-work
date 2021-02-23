@@ -1,3 +1,5 @@
+# Based on https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
+
 import torch
 from torch import nn
 from torch import optim
@@ -86,10 +88,10 @@ class NameDataModule(pl.LightningDataModule):
     def train_dataloader(self):
         return DataLoader(self.dataset, shuffle=True)
 
-class NameGenerator(pl.LightningModule):
+class NameClassifier(pl.LightningModule):
 
     def __init__(self, hparams, input_size, output_size):
-        super(NameGenerator, self).__init__()
+        super(NameClassifier, self).__init__()
         self.hparams = hparams
 
         self.rnn = nn.RNN(input_size, self.hparams.hidden_size, self.hparams.n_layers,
@@ -125,7 +127,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_layers', type=int, default=1)
     args = parser.parse_args()
 
-    model = NameGenerator(args, name_dm.n_letters, name_dm.n_languages)
+    model = NameClassifier(args, name_dm.n_letters, name_dm.n_languages)
 
     trainer = pl.Trainer(
         max_epochs=3,
