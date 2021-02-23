@@ -6,11 +6,8 @@ from torch import optim
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import EarlyStopping
-from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.metrics import Accuracy
 from pytorch_lightning import seed_everything
-import wandb
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -131,7 +128,6 @@ if __name__ == '__main__':
 
     trainer = pl.Trainer(
         max_epochs=3,
-        callbacks=[EarlyStopping('loss')]
     )
     trainer.fit(model, name_dm)
 
